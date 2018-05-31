@@ -1,0 +1,177 @@
+﻿@model IoTHubMonitoring.Models.DeviceDetailsDTO
+
+@{
+    ViewData["Title"] = "Details";
+}
+
+<h2>Details</h2>
+
+<div>
+    <h4>DeviceDetailsDTO</h4>
+    <hr />
+    <dl class="dl-horizontal">
+        <dt>
+            @Html.DisplayNameFor(model => model.DeviceId)
+        </dt>
+        <dd>
+            @Html.DisplayFor(model => model.DeviceId)
+        </dd>
+    </dl>
+    <dl class="dl-horizontal">
+        <dt>
+            Current Value
+        </dt>
+        <dd id="currentValue">
+            @(0)
+        </dd>
+    </dl>
+
+</div>
+<div>
+    <table id="myTable" class="table">
+        <thead>
+
+            <tr>
+                <th class="col-lg-4" style="text-align:center;">Device</th>
+                <th class="col-lg-4" style="text-align:center;">Average</th>
+                <th class="col-lg-4" style="text-align:center;">Time</th>
+            </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+
+    </table>
+</div>
+<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/modules/export-data.js"></script>
+
+<div id="container" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+@section Scripts
+    {
+    <script type="text/javascript">
+        var tmp = '';
+        var lastValueReceived = {};
+        var LastValueUrl = '@Url.Action("LastValue", new { id = Model.DeviceId })';
+        $.getJSON(LastValueUrl, function (response) {
+            lastValueReceived = response;
+        });
+        function update() {
+
+             $("#myTable tbody").empty();
+                var LastValuesUrl = '@Url.Action("LastValues",new { id = Model.DeviceId })';
+                $.getJSON(LastValuesUrl, function (response) {
+                    for (var i = 0; i < response.length; i++) {
+                        $("#myTable tbody").append("<tr>"
+                            + "<td class='col-lg-4' style='text-align:center;'>" + response[i].deviceId + "</td>"
+                            + "<td class='col-lg-4' style='text-align:center;'>" + response[i].average + "</td>"
+                                + "<td class='col-lg-4' style='text-align:center;'>" + response[i].timestamp + "</td>"
+                            + "</tr >");
+                    }
+
+                })
+        }
+        update();
+        $(function () {
+            setInterval(() => {
+                var CurrentValueUrl = '@Url.Action("CurrentValue",new { id = Model.DeviceId })';
+                $.getJSON(CurrentValueUrl, function (response) {
+                    $("#currentValue").html(response.currentValue);
+                });
+            }, 10000);
+
+            setInterval(() => {
+                update();
+
+            }, 20000)
+
+            setInterval(() => {
+                $.getJSON(LastValueUrl, function (response) {
+                    lastValueReceived = response;
+                });
+
+            }, 1000);
+        });
+
+
+        Highcharts.setOptions({
+            global: {
+                useUTC: false
+            }
+        });
+
+        Highcharts.chart('container', {
+            chart: {
+                type: 'spline',
+                animation: Highcharts.svg, // don't animate in old IE
+                marginRight: 10,
+                events: {
+                    load: function () {
+
+                        // set up the updating of the chart each second
+                        var series = this.series[0];
+                        setInterval(function () {
+                            var x = (new Date(lastValueReceived.timestamp)).getTime(), // current time
+                                y = lastValueReceived.average;
+                            series.addPoint([x, y], true, true);
+                        }, 1000);
+                    }
+                }
+            },
+            title: {
+                text: 'Temperature Average over time'
+            },
+            xAxis: {
+                type: 'datetime',
+                tickPixelInterval: 150
+            },
+            yAxis: {
+                title: {
+                    text: 'Avarage'
+                },
+                plotLines: [{
+                    value: 0,
+                    width: 1,
+                    color: '#000000'
+                }]
+            },
+            tooltip: {
+                formatter: function () {
+                    return '<b>' + this.series.name + '</b><br/>' +
+                        Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br/>' +
+                        Highcharts.numberFormat(this.y, 2);
+                }
+            },
+            legend: {
+                enabled: false
+            },
+            exporting: {
+                enabled: false
+            },
+            series: [{
+                name: 'Data',
+                data: (function () {
+                    // generate an array of random data
+                    var data = [],
+                        time = (new Date(lastValueReceived.timestamp)).getTime(),
+                        i;
+
+                    for (i = -19; i <= 0; i += 1) {
+                        data.push({
+                            x: time + i * 1000,
+                            y: lastValueReceived.average
+                        });
+                    }
+                    return data;
+                }())
+            }]
+        });
+    </script>
+}
